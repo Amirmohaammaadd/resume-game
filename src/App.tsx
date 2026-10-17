@@ -56,7 +56,7 @@ export default function App() {
     <>
       <main
         onClick={onStageClick}
-        className="fixed inset-0 h-dvh overflow-hidden bg-[linear-gradient(var(--color-sky)_55%,var(--color-sky-2))] select-none"
+        className="fixed inset-x-0 top-0 h-lvh overflow-hidden bg-[linear-gradient(var(--color-sky)_55%,var(--color-sky-2))] select-none"
       >
         <FarLayer ref={far} />
         <MidLayer ref={mid} />

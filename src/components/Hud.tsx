@@ -40,14 +40,14 @@ export function Hud({ hud }: { hud: HudState }) {
           </button>
         </div>
         <div className="absolute inset-x-0 bottom-0 h-1 bg-black/15">
-          <i className="block h-full origin-left bg-gold transform-[scaleX(var(--progress,0))]" />
+          <i data-progress className="block h-full origin-left bg-gold transform-[scaleX(0)]" />
         </div>
       </header>
       {hud.started && (
         <div
           key={hud.level}
           aria-live="polite"
-          className="pointer-events-none fixed inset-x-0 bottom-[calc(var(--spacing-ground)/2-22px)] z-49 flex animate-toast flex-col items-center gap-2 font-pixel text-[9px] text-white [text-shadow:2px_2px_0_var(--color-ink)]"
+          className="pointer-events-none fixed inset-x-0 top-[calc(100lvh-var(--spacing-ground)/2-12px)] z-49 flex animate-toast flex-col items-center gap-2 font-pixel text-[9px] text-white [text-shadow:2px_2px_0_var(--color-ink)]"
         >
           WORLD 1-{hud.level + 1}
           <b className="text-xs font-normal">{hud.levelName}</b>

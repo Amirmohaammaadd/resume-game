@@ -6,6 +6,8 @@ import { useCallback, useEffect, useState, type RefObject } from 'react'
 const FAR = 0.12
 const MID = 0.35
 const KEY_SPEED = 9
+/** Height changes smaller than this are the iOS address bar showing/hiding, not a real resize. */
+const TOOLBAR_SLACK = 160
 
 export type HudState = {
   coins: number
@@ -61,17 +63,28 @@ export function useWorld(refs: Refs) {
     const spacer = refs.spacer.current
     if (!world || !far || !mid || !character || !spacer) return
 
-    const root = document.documentElement
+    // Written directly (not via a CSS variable on <html>): a root custom property change
+    // forces a whole-document style recalc every frame, which is very slow on iOS Safari.
+    const progressBar = document.querySelector<HTMLElement>('[data-progress]')
     let maxX = 0
     let vw = 0
+    let vh = 0
+    let worldW = 0
     let charCenter = 0
-    let reveals: { el: HTMLElement; left: number; at: number }[] = []
+    let reveals: { el: HTMLElement; left: number; at: number; on: boolean }[] = []
     let coins: { el: HTMLElement; left: number; got: boolean }[] = []
     let sections: { left: number; name: string }[] = []
     let lastY = window.scrollY
     let frame = 0
     let walkTimer = 0
-    let prev = ''
+    let walking = false
+    let dir = character.dataset.dir
+    let prev: HudState | null = null
+
+    const stopWalking = () => {
+      walking = false
+      delete character.dataset.walking
+    }
 
     const update = () => {
       frame = 0
@@ -80,19 +93,33 @@ export function useWorld(refs: Refs) {
       world.style.transform = `translate3d(${-x}px,0,0)`
       far.style.transform = `translate3d(${-x * FAR}px,0,0)`
       mid.style.transform = `translate3d(${-x * MID}px,0,0)`
-      root.style.setProperty('--progress', String(maxX ? x / maxX : 0))
+      if (progressBar) progressBar.style.transform = `scaleX(${maxX ? x / maxX : 0})`
 
+      // Only touch attributes when they actually change — each write re-styles the character.
       const dy = y - lastY
       lastY = y
       if (dy !== 0) {
-        character.dataset.walking = ''
-        character.dataset.dir = dy > 0 ? 'right' : 'left'
+        if (!walking) {
+          walking = true
+          character.dataset.walking = ''
+        }
+        const nextDir = dy > 0 ? 'right' : 'left'
+        if (nextDir !== dir) {
+          dir = nextDir
+          character.dataset.dir = nextDir
+        }
         window.clearTimeout(walkTimer)
-        walkTimer = window.setTimeout(() => delete character.dataset.walking, 160)
+        walkTimer = window.setTimeout(stopWalking, 160)
       }
 
       const cx = x + charCenter
-      for (const r of reveals) r.el.classList.toggle('is-on', r.left < x + vw * r.at)
+      for (const r of reveals) {
+        const on = r.left < x + vw * r.at
+        if (on !== r.on) {
+          r.on = on
+          r.el.classList.toggle('is-on', on)
+        }
+      }
 
       let got = 0
       for (const c of coins) {
@@ -117,9 +144,15 @@ export function useWorld(refs: Refs) {
         started: x > 8,
         finished: maxX > 0 && x >= maxX - 4,
       }
-      const key = JSON.stringify(next)
-      if (key !== prev) {
-        prev = key
+      if (
+        !prev ||
+        prev.coins !== next.coins ||
+        prev.level !== next.level ||
+        prev.started !== next.started ||
+        prev.finished !== next.finished ||
+        prev.totalCoins !== next.totalCoins
+      ) {
+        prev = next
         setHud(next)
       }
     }
@@ -130,8 +163,9 @@ export function useWorld(refs: Refs) {
 
     const measure = () => {
       vw = window.innerWidth
-      const vh = window.innerHeight
-      maxX = Math.max(0, world.scrollWidth - vw)
+      vh = window.innerHeight
+      worldW = world.scrollWidth
+      maxX = Math.max(0, worldW - vw)
       spacer.style.height = `${maxX + vh}px`
       far.style.width = `${vw + maxX * FAR + 200}px`
       mid.style.width = `${vw + maxX * MID + 200}px`
@@ -141,6 +175,7 @@ export function useWorld(refs: Refs) {
         el,
         left: offsetIn(el, world),
         at: Number(el.dataset.reveal) || 0.72,
+        on: el.classList.contains('is-on'),
       }))
       coins = Array.from(world.querySelectorAll<HTMLElement>('[data-coin]')).map((el) => ({
         el,
@@ -158,8 +193,8 @@ export function useWorld(refs: Refs) {
     const held = new Set<'left' | 'right'>()
     let keyFrame = 0
     const step = () => {
-      const dir = (held.has('right') ? 1 : 0) - (held.has('left') ? 1 : 0)
-      if (dir) window.scrollBy(0, dir * KEY_SPEED * (vw > 900 ? 1.4 : 1))
+      const move = (held.has('right') ? 1 : 0) - (held.has('left') ? 1 : 0)
+      if (move) window.scrollBy(0, move * KEY_SPEED * (vw > 900 ? 1.4 : 1))
       keyFrame = held.size ? requestAnimationFrame(step) : 0
     }
     const onKeyDown = (e: KeyboardEvent) => {
@@ -209,10 +244,18 @@ export function useWorld(refs: Refs) {
     }
     const onTouchEnd = () => (touch = null)
 
-    const ro = new ResizeObserver(measure)
+    // iOS Safari fires resize (and resizes dvh/fixed boxes) every time the address bar
+    // collapses or expands while scrolling. Re-measuring then means a forced layout of the
+    // whole world mid-scroll, so only react to real size changes.
+    const onResize = () => {
+      if (window.innerWidth !== vw || Math.abs(window.innerHeight - vh) > TOOLBAR_SLACK) measure()
+    }
+    const ro = new ResizeObserver(() => {
+      if (world.scrollWidth !== worldW) measure()
+    })
     ro.observe(world)
     window.addEventListener('scroll', schedule, { passive: true })
-    window.addEventListener('resize', measure)
+    window.addEventListener('resize', onResize)
     window.addEventListener('keydown', onKeyDown)
     window.addEventListener('keyup', onKeyUp)
     window.addEventListener('blur', onBlur)
@@ -229,7 +272,7 @@ export function useWorld(refs: Refs) {
       cancelAnimationFrame(keyFrame)
       window.clearTimeout(walkTimer)
       window.removeEventListener('scroll', schedule)
-      window.removeEventListener('resize', measure)
+      window.removeEventListener('resize', onResize)
       window.removeEventListener('keydown', onKeyDown)
       window.removeEventListener('keyup', onKeyUp)
       window.removeEventListener('blur', onBlur)

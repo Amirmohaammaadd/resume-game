@@ -11,7 +11,10 @@ export function Finale() {
         className="absolute bottom-ground left-[calc(var(--spacing-char-left)+var(--spacing-char)*0.64+28px)] h-[62%] w-1.5 border-2 border-b-0 border-ink bg-[#e8e8e8]"
       >
         <span className="absolute -top-4.5 left-1/2 -ml-2.25 size-4.5 rounded-full border-2 border-ink bg-leaf" />
-        <span className="absolute top-2.5 left-1 h-10 w-13 bg-cherry transition-[top] duration-1400 ease-[cubic-bezier(.5,0,.3,1)] [clip-path:polygon(0_0,100%_50%,0_100%)] on:top-[calc(100%-70px)]" />
+        {/* Pole-sized track so a % translate equals the pole's height (GPU-only slide, no `top` animation). */}
+        <span className="absolute inset-0 transition-[translate] duration-1400 ease-[cubic-bezier(.5,0,.3,1)] on:translate-y-[calc(100%-80px)]">
+          <span className="absolute top-2.5 left-1 h-10 w-13 bg-cherry [clip-path:polygon(0_0,100%_50%,0_100%)]" />
+        </span>
         <span className="absolute bottom-0 left-1/2 -ml-3.75 size-7.5 border-3 border-ink bg-block-used" />
       </div>
 

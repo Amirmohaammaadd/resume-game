@@ -57,3 +57,13 @@ Custom variants drive the game states:
 | `facing-left:` | the character faces left |
 
 Shared class recipes and small UI pieces (`panel`, `pop`, `btn()`, `Chips`, `Sign`, `Castle`) are in `src/components/ui.tsx`. A few pixel-art patterns stay as plain CSS in `@layer components`, because they'd be unreadable as utility classes: the zigzag ground, castle bricks, block rivets and bushes.
+
+## Performance rules (iPhone Safari)
+
+An earlier version lagged on iPhone Safari while the character walked. These rules fixed it. Keep them when you change the scroll or animation code, and test on a real iPhone afterwards.
+
+1. **Never write a CSS variable on `<html>` per frame.** Changing a custom property on the root makes Safari recalculate styles for the whole page. Write `transform` directly on the element that moves instead. The HUD progress bar works this way, through `data-progress`.
+2. **Only touch the DOM when a value changes.** Inside the scroll loop, cache the last state and write `data-walking`, `data-dir`, `is-on` and `got` only when they flip. Writing an attribute, even with the same value, re-styles that subtree.
+3. **Ignore iOS address-bar resizes.** Safari fires `resize` and changes `dvh` every time the address bar collapses or expands. `useWorld` only re-measures when the width changes or the height changes by more than `TOOLBAR_SLACK`. For the same reason the stage uses `h-lvh` (not `dvh` or `inset-0`), and the character is `absolute` inside the stage rather than `fixed`, so it stays on the ground.
+4. **Animate HTML elements, not SVG parts.** Safari runs CSS animations on SVG `<g>` elements on the main thread and repaints the SVG every frame. In `Character.tsx` each limb is its own HTML layer holding an SVG slice, so the swing, bob, blink and jump run on the GPU.
+5. **Animate only `transform` and `opacity`.** Animating anything else (`top`, `width`, `box-shadow`, colors) triggers layout or paint on every frame.
